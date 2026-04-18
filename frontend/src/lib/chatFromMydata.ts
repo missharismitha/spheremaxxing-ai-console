@@ -129,73 +129,141 @@ function rowsSingleSourceReal(): RealRow[] {
   return realRows.filter((r) => single.has(r.raw_material_id));
 }
 
-function formatUniqSuppliers(rows: RealRow[]): string {
-  const map = new Map<number, { name: string; id: number; skus: Set<string> }>();
+/** Group rows by display material name → distinct supplier names */
+/** Prefer e.g. «Soy Lecithin» over «Lecithin» when the question mentions the fuller phrase. */
+export function narrowRowsToBestMaterialPhrase(message: string, rows: RealRow[]): RealRow[] {
+  if (rows.length <= 1) return rows;
+  const lower = message.toLowerCase();
+  const byDn = new Map<string, RealRow[]>();
   for (const r of rows) {
-    const ex = map.get(r.supplier_id) ?? { name: r.supplier_name, id: r.supplier_id, skus: new Set<string>() };
-    ex.skus.add(r.raw_material_sku);
-    map.set(r.supplier_id, ex);
+    const dn = nameFromSku(r.raw_material_sku);
+    const list = byDn.get(dn) ?? [];
+    list.push(r);
+    byDn.set(dn, list);
   }
-  const lines = [...map.values()].map((s) => {
-    const skuList = [...s.skus].slice(0, 3).join(", ");
-    const more = s.skus.size > 3 ? ` (+${s.skus.size - 3} more SKU variants)` : "";
-    return `- ${s.name} (supplier_id ${s.id}) — SKUs: ${skuList}${more}`;
-  });
-  return lines.join("\n");
+  const score = (dn: string) => {
+    const words = dn.toLowerCase().split(/\s+/).filter((w) => w.length >= 2);
+    if (words.length === 0) return 0;
+    return words.filter((w) => lower.includes(w)).length;
+  };
+  let best = 0;
+  for (const dn of byDn.keys()) best = Math.max(best, score(dn));
+  if (best <= 0) return rows;
+  const out: RealRow[] = [];
+  for (const [dn, list] of byDn) {
+    if (score(dn) === best) out.push(...list);
+  }
+  return out;
 }
 
-/** Main entry — mydata.json only. */
+function suppliersByMaterialName(rows: RealRow[]): Map<string, Set<string>> {
+  const byMat = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const dn = nameFromSku(r.raw_material_sku);
+    if (!byMat.has(dn)) byMat.set(dn, new Set());
+    const nm = r.supplier_name?.trim();
+    if (nm) byMat.get(dn)!.add(nm);
+  }
+  return byMat;
+}
+
+function formatSupplierList(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function wantsSupplierFocus(message: string): boolean {
+  return /\b(who|which|supplier|suppliers|supply|supplies|source|sources|vendor|vendors|selling|sell|provides?)\b/i.test(
+    message,
+  );
+}
+
+function wantsPrice(message: string): boolean {
+  return /\b(price|cost|cheap|cheapest|\$|€|£)\b/i.test(message);
+}
+
+/** Main entry — grounded in procurement JSON via realData; replies are plain language (no raw dump). */
 export function answerFromMydataJson(message: string): string {
   if (isLowestPriceOrCostQuestion(message)) {
     return (
-      "mydata.json does not contain unit prices, lead times, or currency fields — only relationship rows " +
-        "(company, BOM, raw material SKU, supplier id/name). " +
-        "I can’t rank suppliers by price from this file alone. " +
-        "Use Procurement Search / BOM Explorer to inspect the same rows, or load pricing from your ERP."
+      "Our procurement records here don’t include unit prices or lead times — only which suppliers are linked to which materials. " +
+        "I can’t rank suppliers by price from this data alone. Use Procurement Search or your ERP for pricing."
     );
   }
 
-  const rows = findRealRowsForMessage(message);
+  let rows = findRealRowsForMessage(message);
+  rows = narrowRowsToBestMaterialPhrase(message, rows);
 
   if (rows.length === 0) {
     return (
-      "No rows in mydata.json matched that question (same source as Procurement Search). " +
-        "Try a material phrase that appears in a raw_material_sku (e.g. “soy lecithin”), a numeric raw_material_id, " +
-        "or an RM-C… SKU pattern."
+      "I couldn’t find that material in our procurement data. " +
+        "Try the ingredient or product name (e.g. soy lecithin), a numeric material id, or an RM-C… SKU if you have one."
     );
   }
 
-  const matNames = new Map<number, string>();
-  for (const r of rows) {
-    if (!matNames.has(r.raw_material_id)) matNames.set(r.raw_material_id, nameFromSku(r.raw_material_sku));
+  const byMat = suppliersByMaterialName(rows);
+  const matKeys = [...byMat.keys()].sort((a, b) => b.length - a.length);
+  const primaryMat = matKeys[0] ?? "that material";
+  const askSuppliers = wantsSupplierFocus(message);
+  const askPrice = wantsPrice(message);
+
+  const parts: string[] = [];
+  if (askPrice) {
+    parts.push(
+      "Our procurement records don’t include unit prices — only supplier–material links.",
+    );
   }
-  const matSummary = [...matNames.entries()]
-    .map(([id, n]) => `"${n}" (raw_material_id ${id})`)
-    .join(", ");
 
-  const lines: string[] = [];
-  lines.push(`Source: mydata.json — ${rows.length} relationship row(s) for material(s): ${matSummary}.`);
-  lines.push("Suppliers listed for those rows (same data as Search / BOM):");
-
-  if (/\b(who|which|supplier|suppliers|selling|sell|source|provides?)\b/i.test(message)) {
-    lines.push(formatUniqSuppliers(rows));
-  } else if (
-    /single[\s-]?source|sole supplier|only one supplier|supplier concentration|dependency/i.test(message)
-  ) {
+  if (askSuppliers && byMat.size === 1) {
+    const names = [...byMat.get(primaryMat)!].sort();
+    if (names.length === 1) {
+      parts.push(`${names[0]} is listed as a supplier for ${primaryMat}.`);
+    } else {
+      parts.push(
+        `${formatSupplierList(names)} are listed as suppliers for ${primaryMat}.`,
+      );
+    }
+  } else if (askSuppliers) {
+    const bits = [...byMat.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dn, set]) => `${dn}: ${formatSupplierList([...set].sort())}`);
+    parts.push(`Per our procurement data: ${bits.join("; ")}.`);
+  } else if (/single[\s-]?source|sole supplier|only one supplier|supplier concentration|dependency/i.test(message)) {
     const risky = rowsSingleSourceReal();
     const ids = [...new Set(risky.map((r) => r.raw_material_id))].slice(0, 12);
-    lines.push(
-      `Materials that appear with only one distinct supplier_id in mydata.json (single-source in this file): ${ids.join(", ")}.`,
+    parts.push(
+      `Materials that appear with only one supplier in these records include: ${ids.join(", ")}.`,
     );
   } else if (/\bsubstitut|alternativ|replace\b/i.test(message)) {
-    lines.push(
-      "Substitute options are not recorded in mydata.json — only supplier–material–BOM links. Check your formulation tools or another dataset for alternates.",
+    parts.push(
+      "Substitute options aren’t recorded here — only supplier–material–BOM links. Check formulation tools or another dataset for alternates.",
     );
   } else {
-    lines.push(formatUniqSuppliers(rows));
+    const allSups = new Set<string>();
+    for (const s of byMat.values()) for (const n of s) allSups.add(n);
+    const list = [...allSups].sort();
+    if (list.length <= 3) {
+      parts.push(`For ${primaryMat}, suppliers in our records include ${formatSupplierList(list)}.`);
+    } else {
+      parts.push(
+        `For ${primaryMat}, our records list multiple suppliers (${list.length} distinct).`,
+      );
+    }
   }
 
-  return lines.join("\n\n");
+  if (
+    !askPrice &&
+    !parts.some((p) => /pricing|price/i.test(p)) &&
+    !/\bsubstitut|alternativ|replace\b|single[\s-]?source|sole supplier|only one supplier|supplier concentration|dependency/i.test(
+      message,
+    )
+  ) {
+    parts.push("Pricing isn’t available in this dataset.");
+  }
+
+  return parts.join(" ");
 }
 
 /** Legacy export name used by api.ts */
