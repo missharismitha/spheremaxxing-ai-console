@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => ({
       "/api": {
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
+        /** Longer timeout for Groq-backed /api/chat on slow networks */
+        timeout: 120_000,
       },
     },
   },
