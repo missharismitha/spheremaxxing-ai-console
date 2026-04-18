@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { aiInsights, procurementData } from "@/data/mockData";
+import { getProcurementApiLive, postProcurementChat } from "@/lib/api";
 import {
   Sparkles,
   TrendingDown,
@@ -43,15 +45,53 @@ const DecisionSupport = () => {
     },
   ]);
   const [input, setInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [apiLive, setApiLive] = useState<boolean | null>(null);
 
-  const send = () => {
-    if (!input.trim()) return;
-    setMessages([...messages, { role: "user", text: input }, {
-      role: "assistant",
-      text: "Analyzing… recommended sourcing path optimizes cost while reducing risk exposure by 18%. Want me to draft the procurement brief?",
-    }]);
-    setInput("");
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      void getProcurementApiLive().then((ok) => {
+        if (!cancelled) setApiLive(ok);
+      });
+    };
+    run();
+    const onFocus = () => run();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  const submit = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || chatLoading) return;
+
+      const history = messages.map((m) => ({ role: m.role, content: m.text }));
+      setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+      setInput("");
+      setChatLoading(true);
+
+      try {
+        const reply = await postProcurementChat(trimmed, history);
+        setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `The chat API returned an error (not a connection issue). From the repo root run \`npm run dev:all\` so Vite and FastAPI start together, then retry. Details: ${err}`,
+          },
+        ]);
+      } finally {
+        setChatLoading(false);
+      }
+    },
+    [chatLoading, messages],
+  );
 
   return (
     <div className="space-y-6">
@@ -144,13 +184,38 @@ const DecisionSupport = () => {
               </div>
               <div>
                 <div className="font-display font-semibold">Spheremaxxing Co-pilot</div>
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                  <span className="status-dot bg-success animate-pulse-glow" /> Online · Procurement context loaded
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  {apiLive === null && (
+                    <>
+                      <span className="status-dot bg-muted-foreground/80" /> Checking API…
+                    </>
+                  )}
+                  {apiLive === true && (
+                    <>
+                      <span className="status-dot bg-success" /> Live · Full database (SQLite) + chat API
+                    </>
+                  )}
+                  {apiLive === false && (
+                    <>
+                      <span className="status-dot bg-amber-500" /> Demo mode · Sample data only (API not on port 8000)
+                    </>
+                  )}
                 </div>
               </div>
             </div>
             <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">v2.4</Badge>
           </div>
+
+          {apiLive === false && (
+            <div className="px-5 py-2.5 border-b border-border/50 text-[11px] leading-snug bg-amber-500/10 text-foreground/90">
+              The full SQLite database is available when FastAPI is running. From the repository root run{" "}
+              <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">npm run dev:all</code>{" "}
+              so Vite and the backend start together (API on{" "}
+              <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">127.0.0.1:8000</code>). Deployed
+              previews often have no Python server — use local dev or set{" "}
+              <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">VITE_API_URL</code> to your API URL.
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {messages.map((m, i) => (
@@ -164,6 +229,13 @@ const DecisionSupport = () => {
                 </div>
               </div>
             ))}
+            {chatLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm text-muted-foreground bg-secondary/40 border border-border/60 rounded-bl-sm animate-pulse">
+                  Thinking…
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Live Insights</div>
@@ -180,7 +252,13 @@ const DecisionSupport = () => {
           <div className="p-4 border-t border-border/60">
             <div className="flex gap-2 mb-2 flex-wrap">
               {["Best supplier for RM-431?", "Where is single-source risk?", "Substitutes for Lithium Carbonate"].map((q) => (
-                <button key={q} onClick={() => setInput(q)} className="text-[11px] px-2.5 py-1 rounded-full border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors">
+                <button
+                  key={q}
+                  type="button"
+                  disabled={chatLoading}
+                  onClick={() => void submit(q)}
+                  className="text-[11px] px-2.5 py-1 rounded-full border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
+                >
                   {q}
                 </button>
               ))}
@@ -189,11 +267,22 @@ const DecisionSupport = () => {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void submit(input);
+                  }
+                }}
                 placeholder="Ask about cost, risk, suppliers, substitutions…"
-                className="flex-1 h-11 rounded-lg bg-secondary/40 border border-border/60 px-4 text-sm focus:outline-none focus:border-primary/50"
+                disabled={chatLoading}
+                className="flex-1 h-11 rounded-lg bg-secondary/40 border border-border/60 px-4 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-60"
               />
-              <Button onClick={send} className="h-11 bg-gradient-primary text-primary-foreground">
+              <Button
+                type="button"
+                disabled={chatLoading}
+                onClick={() => void submit(input)}
+                className="h-11 bg-gradient-primary text-primary-foreground"
+              >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -204,7 +293,17 @@ const DecisionSupport = () => {
   );
 };
 
-function RecCard({ icon: Icon, accent, label, title, subtitle, metric, note }: any) {
+type RecCardProps = {
+  icon: LucideIcon;
+  accent: "success" | "primary" | "accent";
+  label: string;
+  title: string;
+  subtitle: string;
+  metric: string;
+  note: string;
+};
+
+function RecCard({ icon: Icon, accent, label, title, subtitle, metric, note }: RecCardProps) {
   const accentMap: Record<string, string> = {
     success: "from-success/15 border-success/30",
     primary: "from-primary/15 border-primary/30",
