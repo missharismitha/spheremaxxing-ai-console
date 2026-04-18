@@ -7,6 +7,7 @@ import {
   BrainCircuit,
   BarChart3,
   Settings,
+  FileStack,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils";
 const mainNav = [
   { title: "Dashboard", url: "/app", icon: LayoutDashboard, end: true },
   { title: "Procurement Search", url: "/app/search", icon: Search },
+  { title: "BOM Explorer", url: "/app/bom", icon: FileStack },
   { title: "Supplier Intelligence", url: "/app/suppliers", icon: Network },
   { title: "Substitution Engine", url: "/app/substitution", icon: Repeat },
   { title: "Decision Support", url: "/app/decisions", icon: BrainCircuit },

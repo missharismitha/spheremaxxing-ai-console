@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useNavigate } from "react-router-dom";
+import { DataModeSwitcher } from "./DataModeSwitcher";
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -38,9 +39,11 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
+          <DataModeSwitcher className="hidden sm:inline-flex" />
+
           <Badge
             variant="outline"
-            className="hidden md:flex gap-1.5 border-success/40 bg-success/10 text-success-foreground px-2.5 py-1"
+            className="hidden lg:flex gap-1.5 border-success/40 bg-success/10 text-success-foreground px-2.5 py-1"
           >
             <Sparkles className="h-3 w-3" style={{ color: "hsl(var(--success))" }} />
             <span className="text-[11px] font-medium" style={{ color: "hsl(var(--success))" }}>AI Engine Active</span>
