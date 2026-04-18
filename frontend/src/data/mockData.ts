@@ -34,7 +34,142 @@ export type ProcurementRecord = {
   substitute_options: Substitute[];
 };
 
-export const procurementData: ProcurementRecord[] = [
+/** Demo rows for substitute chat filtering (41 lines for Calcium Carbonate). */
+function buildCalciumCarbonateRows(): ProcurementRecord[] {
+  const pureSubs: Substitute[] = [
+    {
+      name: "Milk Protein",
+      compatibility_score: 0.71,
+      cost_impact: "+6%",
+      risk_impact: "-5%",
+      lead_time_impact: "+2d",
+      confidence: 0.76,
+      rationale: "Protein buffer alternative for certain chewable matrices.",
+    },
+    {
+      name: "Whey Protein Isolate",
+      compatibility_score: 0.64,
+      cost_impact: "+12%",
+      risk_impact: "-3%",
+      lead_time_impact: "+1d",
+      confidence: 0.7,
+      rationale: "Higher solubility profile; adjust tablet hardness.",
+    },
+    {
+      name: "Hydroxypropyl Methylcellulose",
+      compatibility_score: 0.58,
+      cost_impact: "-4%",
+      risk_impact: "+8%",
+      lead_time_impact: "+0d",
+      confidence: 0.62,
+      rationale: "Binder substitute where mineral label claim can shift.",
+    },
+  ];
+  const jostSubs: Substitute[] = [
+    {
+      name: "Sucralose",
+      compatibility_score: 0.55,
+      cost_impact: "+2%",
+      risk_impact: "+4%",
+      lead_time_impact: "+3d",
+      confidence: 0.59,
+      rationale: "Sweetness system change when reformulating around mineral load.",
+    },
+    {
+      name: "Zinc Oxide",
+      compatibility_score: 0.61,
+      cost_impact: "+8%",
+      risk_impact: "-2%",
+      lead_time_impact: "+1d",
+      confidence: 0.68,
+      rationale: "Alternative mineral route for combined mineral SKUs.",
+    },
+    {
+      name: "Vitamin D3 Cholecalciferol",
+      compatibility_score: 0.72,
+      cost_impact: "+5%",
+      risk_impact: "-4%",
+      lead_time_impact: "+0d",
+      confidence: 0.74,
+      rationale: "Pairs with bone-health positioning alongside calcium.",
+    },
+  ];
+
+  const rows: ProcurementRecord[] = [];
+  rows.push({
+    company_id: "C900",
+    company_name: "One A Day",
+    finished_product_id: "FP9001",
+    finished_product_name: "One A Day Daily Tablet",
+    finished_product_sku: "FG-costco-100143268",
+    bom_id: "BOM-118",
+    raw_material_id: "RM-1105",
+    raw_material_name: "Calcium Carbonate",
+    raw_material_sku: "RM-CC-1105",
+    supplier_id: "19",
+    supplier_name: "Jost Chemical",
+    region: "United States",
+    estimated_cost: 4.8,
+    lead_time_days: 10,
+    risk_score: 0.21,
+    reliability_score: 0.89,
+    availability_score: 0.9,
+    sustainability_score: 0.75,
+    certifications: ["GMP"],
+    substitute_options: jostSubs,
+  });
+  rows.push({
+    company_id: "C900",
+    company_name: "One A Day",
+    finished_product_id: "FP9001",
+    finished_product_name: "One A Day Daily Tablet",
+    finished_product_sku: "FG-costco-100143268",
+    bom_id: "BOM-118",
+    raw_material_id: "RM-1105",
+    raw_material_name: "Calcium Carbonate",
+    raw_material_sku: "RM-CC-1105",
+    supplier_id: "28",
+    supplier_name: "Jost Chemical",
+    region: "United States",
+    estimated_cost: 5.0,
+    lead_time_days: 9,
+    risk_score: 0.2,
+    reliability_score: 0.9,
+    availability_score: 0.88,
+    sustainability_score: 0.76,
+    certifications: ["ISO 9001", "USP", "GMP"],
+    substitute_options: jostSubs,
+  });
+
+  for (let i = 2; i < 41; i++) {
+    const jost = i < 24;
+    rows.push({
+      company_id: `C${900 + (i % 5)}`,
+      company_name: i % 7 === 0 ? "One A Day" : "NutraSphere Labs",
+      finished_product_id: `FP${8000 + i}`,
+      finished_product_name: i % 7 === 0 ? "One A Day Daily Tablet" : "Calcium Plus Tablet",
+      finished_product_sku: i % 7 === 0 ? "FG-costco-100143268" : `amazon-FP${8000 + i}`,
+      bom_id: `BOM-${4000 + i}`,
+      raw_material_id: "RM-1105",
+      raw_material_name: "Calcium Carbonate",
+      raw_material_sku: "RM-CC-1105",
+      supplier_id: jost ? `SUP-JOST-${i}` : `SUP-PB-${i}`,
+      supplier_name: jost ? "Jost Chemical" : "PureBulk",
+      region: i % 3 === 0 ? "Germany" : "United States",
+      estimated_cost: 4 + (i % 10) * 0.1,
+      lead_time_days: 8 + (i % 5),
+      risk_score: 0.2,
+      reliability_score: 0.88,
+      availability_score: 0.89,
+      sustainability_score: 0.74,
+      certifications: ["ISO 9001", "GMP"],
+      substitute_options: jost ? jostSubs : pureSubs,
+    });
+  }
+  return rows;
+}
+
+const _procurementDataBase: ProcurementRecord[] = [
   {
     company_id: "C102",
     company_name: "NutraSphere Labs",
@@ -268,6 +403,11 @@ export const procurementData: ProcurementRecord[] = [
     certifications: ["GMP", "WHO-PQ"],
     substitute_options: [],
   },
+];
+
+export const procurementData: ProcurementRecord[] = [
+  ..._procurementDataBase,
+  ...buildCalciumCarbonateRows(),
 ];
 
 // Aggregate KPI metrics

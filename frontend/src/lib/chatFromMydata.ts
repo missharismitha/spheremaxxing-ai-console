@@ -1,8 +1,9 @@
 /**
- * Chat answers grounded only in mydata.json (via realData.ts).
- * Same source as Procurement Search & BOM Explorer — no mockData / no invented suppliers.
+ * Chat answers grounded in mydata.json (via realData.ts), with Simulated substitute
+ * catalog from mockData when substitute questions need demo content Real data lacks.
  */
 import { nameFromSku, realRows, type RealRow } from "@/data/realData";
+import { buildSimulatedSubstitutesAnswer } from "@/lib/chatSimulatedSubstitutes";
 
 const STOP = new Set(
   "the and for with from this that these those what when where which who how why are was were been being not you any all can ask get our out use using per unit one two may its its a an or as at be by if in of on to up we he she it their they them".split(
@@ -267,6 +268,15 @@ export function answerFromMydataJson(message: string): string {
 }
 
 /** Legacy export name used by api.ts */
-export function localProcurementChatFallback(message: string): string {
+export function localProcurementChatFallback(
+  message: string,
+  history: { role: "user" | "assistant"; content: string }[] = [],
+): string {
+  const turns = history.map((h) => ({
+    role: h.role as "user" | "assistant",
+    content: h.content,
+  }));
+  const sim = buildSimulatedSubstitutesAnswer(message, turns);
+  if (sim) return sim;
   return answerFromMydataJson(message);
 }

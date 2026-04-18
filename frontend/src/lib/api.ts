@@ -90,7 +90,7 @@ export async function postProcurementChat(
     });
   } catch {
     await delay(MYDATA_FALLBACK_MS);
-    return localProcurementChatFallback(message);
+    return localProcurementChatFallback(message, history);
   }
 
   if (res.ok) {
@@ -101,7 +101,7 @@ export async function postProcurementChat(
   // 502/503 from Vite proxy = nothing listening on 8000; hosted preview = no Python
   if (res.status === 502 || res.status === 503 || res.status === 504) {
     await delay(MYDATA_FALLBACK_MS);
-    return localProcurementChatFallback(message);
+    return localProcurementChatFallback(message, history);
   }
 
   const text = await res.text();

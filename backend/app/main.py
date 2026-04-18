@@ -168,5 +168,5 @@ async def chat(body: ChatRequest) -> ChatResponse:
     )
     reply = generate_procurement_chat_reply(body.message, data_context, hist)
     if reply is None:
-        reply = fallback_reply(body.message, data_context)
+        reply = fallback_reply(body.message, data_context, hist)
     return ChatResponse(reply=reply)
