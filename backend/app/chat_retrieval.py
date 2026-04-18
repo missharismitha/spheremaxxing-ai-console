@@ -163,7 +163,7 @@ def build_data_context(user_message: str) -> str:
     mids, note = pick_material_ids_for_context(user_message, max_ids=3)
     parts: List[str] = []
     if mydata.strip():
-        parts.append("PRIMARY SOURCE — mydata.json (same rows as Procurement Search / BOM Explorer; use for supplier names):")
+        parts.append("PRIMARY SOURCE — verified procurement relationships (same facts as Search / BOM; use for supplier names):")
         parts.append(mydata)
         parts.append("---")
     parts.append(f"SQLite analytic DB: {total_m} raw materials in Product.")
