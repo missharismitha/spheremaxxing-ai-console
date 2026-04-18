@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { aiInsights, procurementData } from "@/data/mockData";
 import { getProcurementApiLive, postProcurementChat } from "@/lib/api";
+import { isDifyConfigured } from "@/lib/difyChat";
 import {
   Sparkles,
   TrendingDown,
@@ -47,6 +48,8 @@ const DecisionSupport = () => {
   const [input, setInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [apiLive, setApiLive] = useState<boolean | null>(null);
+  /** Dify advanced-chat thread id (returned from POST /chat-messages). */
+  const [difyConversationId, setDifyConversationId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -75,22 +78,22 @@ const DecisionSupport = () => {
       setChatLoading(true);
 
       try {
-        const reply = await postProcurementChat(trimmed, history);
+        const reply = await postProcurementChat(trimmed, history, {
+          conversationId: difyConversationId,
+          onConversationId: setDifyConversationId,
+        });
         setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text: `The chat API returned an error (not a connection issue). From the repo root run \`npm run dev:all\` so Vite and FastAPI start together, then retry. Details: ${err}`,
-          },
-        ]);
+        const text = isDifyConfigured()
+          ? `Dify chat error: ${err}`
+          : `The chat API returned an error (not a connection issue). From the repo root run \`npm run dev:all\` so Vite and FastAPI start together, then retry. Details: ${err}`;
+        setMessages((prev) => [...prev, { role: "assistant", text }]);
       } finally {
         setChatLoading(false);
       }
     },
-    [chatLoading, messages],
+    [chatLoading, messages, difyConversationId],
   );
 
   return (
@@ -185,17 +188,25 @@ const DecisionSupport = () => {
               <div>
                 <div className="font-display font-semibold">Spheremaxxing Co-pilot</div>
                 <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                  {apiLive === null && (
+                  {isDifyConfigured() && (
+                    <>
+                      <span className="status-dot bg-success" /> Chat · Dify (advanced-chat)
+                      {apiLive === true && (
+                        <span className="text-muted-foreground/80"> · Local procurement API online</span>
+                      )}
+                    </>
+                  )}
+                  {!isDifyConfigured() && apiLive === null && (
                     <>
                       <span className="status-dot bg-muted-foreground/80" /> Checking API…
                     </>
                   )}
-                  {apiLive === true && (
+                  {!isDifyConfigured() && apiLive === true && (
                     <>
                       <span className="status-dot bg-success" /> Live · Full database (SQLite) + chat API
                     </>
                   )}
-                  {apiLive === false && (
+                  {!isDifyConfigured() && apiLive === false && (
                     <>
                       <span className="status-dot bg-amber-500" /> Demo mode · Sample data only (API not on port 8000)
                     </>
@@ -206,7 +217,7 @@ const DecisionSupport = () => {
             <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">v2.4</Badge>
           </div>
 
-          {apiLive === false && (
+          {apiLive === false && !isDifyConfigured() && (
             <div className="px-5 py-2.5 border-b border-border/50 text-[11px] leading-snug bg-amber-500/10 text-foreground/90">
               The full SQLite database is available when FastAPI is running. From the repository root run{" "}
               <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">npm run dev:all</code>{" "}
@@ -214,6 +225,13 @@ const DecisionSupport = () => {
               <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">127.0.0.1:8000</code>). Deployed
               previews often have no Python server — use local dev or set{" "}
               <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">VITE_API_URL</code> to your API URL.
+            </div>
+          )}
+          {isDifyConfigured() && apiLive === false && (
+            <div className="px-5 py-2.5 border-b border-border/50 text-[11px] leading-snug bg-secondary/40 text-foreground/85">
+              Chat uses Dify (<code className="font-mono text-[10px]">VITE_DIFY_*</code>). Local FastAPI is offline —
+              procurement SQLite features stay in demo until you run{" "}
+              <code className="font-mono text-[10px] bg-secondary/80 px-1 rounded">npm run dev:all</code>.
             </div>
           )}
 
