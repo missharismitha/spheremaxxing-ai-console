@@ -6,122 +6,165 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { procurementData } from "@/data/mockData";
 import { Check, MapPin, Plus, X } from "lucide-react";
+import {
+  getRealRawMaterials,
+  getRowsByMaterial,
+  nameFromSku,
+} from "@/data/realData";
+import { simulateSupplierProfile } from "@/data/simulatedIntelligence";
+import { useDataMode } from "@/contexts/DataModeContext";
+import { SimulatedBadge, RealDataBadge, NotInRealData } from "@/components/SimulatedBadge";
 
 const SupplierIntelligence = () => {
-  const materials = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    procurementData.forEach((r) => map.set(r.raw_material_id, { id: r.raw_material_id, name: r.raw_material_name }));
-    return Array.from(map.values());
-  }, []);
+  const { mode } = useDataMode();
+  const materials = useMemo(() => getRealRawMaterials().sort((a, b) => b.supplier_count - a.supplier_count), []);
+  // pick first material that has at least 2 suppliers for a useful default
+  const initial = materials.find((m) => m.supplier_count >= 2) ?? materials[0];
 
-  const [materialId, setMaterialId] = useState<string>(materials[0].id);
-  const suppliers = useMemo(
-    () => procurementData.filter((r) => r.raw_material_id === materialId),
-    [materialId],
-  );
-  const [selected, setSelected] = useState<string[]>(suppliers.slice(0, 2).map((s) => s.supplier_id));
+  const [materialId, setMaterialId] = useState<number>(initial.raw_material_id);
+  const rows = useMemo(() => getRowsByMaterial(materialId), [materialId]);
+  const supplierRows = useMemo(() => {
+    // dedupe by supplier
+    const m = new Map<number, { supplier_id: number; supplier_name: string }>();
+    rows.forEach((r) => m.set(r.supplier_id, { supplier_id: r.supplier_id, supplier_name: r.supplier_name }));
+    return Array.from(m.values()).map((s) => ({
+      ...s,
+      sim: simulateSupplierProfile(s.supplier_id, materialId),
+    }));
+  }, [rows, materialId]);
 
-  const toggle = (id: string) => {
+  const [selected, setSelected] = useState<number[]>(supplierRows.slice(0, 2).map((s) => s.supplier_id));
+
+  // Reset selection when material changes
+  useMemo(() => {
+    setSelected(supplierRows.slice(0, 2).map((s) => s.supplier_id));
+  }, [materialId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (id: number) => {
     setSelected((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < 4 ? [...cur, id] : cur);
   };
 
-  const compareSet = suppliers.filter((s) => selected.includes(s.supplier_id));
-  const bestCost = Math.min(...compareSet.map((s) => s.estimated_cost));
-  const bestLead = Math.min(...compareSet.map((s) => s.lead_time_days));
-  const bestRisk = Math.min(...compareSet.map((s) => s.risk_score));
+  const compareSet = supplierRows.filter((s) => selected.includes(s.supplier_id));
+  const bestCost = compareSet.length ? Math.min(...compareSet.map((s) => s.sim.estimated_cost.value)) : 0;
+  const bestLead = compareSet.length ? Math.min(...compareSet.map((s) => s.sim.lead_time_days.value)) : 0;
+  const bestRisk = compareSet.length ? Math.min(...compareSet.map((s) => s.sim.risk_score.value)) : 0;
+
+  const currentMaterial = materials.find((m) => m.raw_material_id === materialId);
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Supplier Intelligence"
         title="Supplier Network Visibility"
-        subtitle="Compare suppliers across cost, lead time, risk, reliability, and geographic exposure."
-        actions={
-          <Select value={materialId} onValueChange={(v) => { setMaterialId(v); setSelected([]); }}>
-            <SelectTrigger className="w-72 bg-secondary/40 border-border/60">
-              <SelectValue placeholder="Select raw material" />
-            </SelectTrigger>
-            <SelectContent>
-              {materials.map((m) => (
-                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
+        subtitle="For any raw material in your real dataset, compare every approved supplier across cost, lead time, risk, and reliability."
       />
 
+      <div className="rounded-xl border border-border/60 bg-card p-4 shadow-card flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Raw material</div>
+        <Select value={String(materialId)} onValueChange={(v) => setMaterialId(Number(v))}>
+          <SelectTrigger className="lg:w-[420px] h-11 bg-secondary/40 border-border/60">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-[400px]">
+            {materials.slice(0, 200).map((m) => (
+              <SelectItem key={m.raw_material_id} value={String(m.raw_material_id)}>
+                {m.display_name} <span className="text-muted-foreground ml-1">· {m.supplier_count} suppliers</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+          <RealDataBadge />
+          <span>{supplierRows.length} approved suppliers · used in {currentMaterial?.used_in_bom_count ?? 0} BOMs</span>
+        </div>
+      </div>
+
       {/* Supplier list */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {suppliers.map((s) => {
-          const active = selected.includes(s.supplier_id);
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {supplierRows.map((s) => {
+          const isSel = selected.includes(s.supplier_id);
           return (
             <div
               key={s.supplier_id}
-              className={`rounded-xl border p-5 transition-all cursor-pointer ${
-                active ? "border-primary/50 bg-primary/5 shadow-elegant" : "border-border/60 bg-card hover:border-primary/30"
+              className={`rounded-xl border p-4 transition-all ${
+                isSel ? "border-primary/50 bg-primary/5" : "border-border/60 bg-card"
               }`}
-              onClick={() => toggle(s.supplier_id)}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{s.supplier_name}</h3>
-                    {active && <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">Comparing</Badge>}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                    <MapPin className="h-3 w-3" />{s.region} · <span className="font-mono">{s.supplier_id}</span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{s.supplier_name}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-2">
+                    #{s.supplier_id}
+                    <RealDataBadge />
                   </div>
                 </div>
-                <div className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
-                  active ? "bg-primary border-primary text-primary-foreground" : "border-border bg-secondary/40 text-muted-foreground"
-                }`}>
-                  {active ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                </div>
+                <Button
+                  size="sm"
+                  variant={isSel ? "default" : "outline"}
+                  className={isSel ? "bg-primary text-primary-foreground" : "border-border/60"}
+                  onClick={() => toggle(s.supplier_id)}
+                >
+                  {isSel ? <><Check className="h-3.5 w-3.5 mr-1" /> Selected</> : <><Plus className="h-3.5 w-3.5 mr-1" /> Compare</>}
+                </Button>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 mt-5">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Cost</div>
-                  <div className="font-display text-lg font-semibold mt-0.5">${s.estimated_cost.toFixed(2)}</div>
+              {mode === "real" ? (
+                <div className="mt-3 pt-3 border-t border-border/50 text-[11px]">
+                  <NotInRealData />
+                  <p className="text-muted-foreground mt-1">
+                    Region, cost, lead time, and risk are not in the real dataset.
+                  </p>
                 </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Lead Time</div>
-                  <div className="font-display text-lg font-semibold mt-0.5">{s.lead_time_days}d</div>
+              ) : (
+                <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground inline-flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> {s.sim.region.value} · {s.sim.country_of_origin.value}
+                    </span>
+                    <SimulatedBadge confidence={s.sim.region.confidence} compact />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Cost</div>
+                      <div className="font-mono tabular-nums">${s.sim.estimated_cost.value.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Lead</div>
+                      <div className="font-mono tabular-nums">{s.sim.lead_time_days.value}d</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground w-20">Reliability</span>
+                      <ScoreBar value={s.sim.reliability_score.value} variant="positive" className="flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground w-20">Risk</span>
+                      <ScoreBar value={s.sim.risk_score.value} variant="risk" className="flex-1" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Risk</div>
-                  <div className="font-display text-lg font-semibold mt-0.5">{(s.risk_score * 100).toFixed(0)}</div>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-1.5">
-                <div className="flex items-center gap-3"><span className="text-[11px] text-muted-foreground w-24">Reliability</span><ScoreBar value={s.reliability_score} variant="positive" className="flex-1" /></div>
-                <div className="flex items-center gap-3"><span className="text-[11px] text-muted-foreground w-24">Availability</span><ScoreBar value={s.availability_score} variant="positive" className="flex-1" /></div>
-                <div className="flex items-center gap-3"><span className="text-[11px] text-muted-foreground w-24">Sustainability</span><ScoreBar value={s.sustainability_score} variant="positive" className="flex-1" /></div>
-              </div>
-
-              <div className="flex flex-wrap gap-1 mt-4">
-                {s.certifications.map((c) => (
-                  <Badge key={c} variant="outline" className="border-border/60 bg-secondary/40 text-[10px]">{c}</Badge>
-                ))}
-              </div>
+              )}
             </div>
           );
         })}
       </div>
 
       {/* Comparison panel */}
-      {compareSet.length >= 2 && (
-        <div className="rounded-xl border border-primary/30 bg-card shadow-elegant overflow-hidden">
+      {compareSet.length >= 2 && mode !== "real" && (
+        <div className="rounded-xl border border-border/60 bg-card shadow-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-primary">Side-by-Side Analysis</div>
-              <h3 className="font-display text-lg font-semibold mt-1">Comparing {compareSet.length} suppliers</h3>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-2">
+                Side-by-side comparison <SimulatedBadge confidence="Medium" />
+              </div>
+              <h3 className="font-display text-lg font-semibold mt-1">
+                {compareSet.length} suppliers · {currentMaterial?.display_name}
+              </h3>
             </div>
-            <Button variant="outline" size="sm" className="border-border/60" onClick={() => setSelected([])}>
-              <X className="h-3.5 w-3.5 mr-1" /> Clear
+            <Button variant="ghost" size="sm" onClick={() => setSelected([])}>
+              Clear all
             </Button>
           </div>
           <div className="overflow-x-auto">
@@ -130,31 +173,31 @@ const SupplierIntelligence = () => {
                 <tr>
                   <th className="text-left font-medium px-6 py-3">Metric</th>
                   {compareSet.map((s) => (
-                    <th key={s.supplier_id} className="text-left font-medium px-4 py-3">{s.supplier_name}</th>
+                    <th key={s.supplier_id} className="text-left font-medium px-4 py-3 min-w-[180px]">
+                      <div className="font-semibold text-foreground">{s.supplier_name}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono">#{s.supplier_id}</div>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { label: "Region", key: (s: any) => s.region },
-                  { label: "Cost / unit", key: (s: any) => `$${s.estimated_cost.toFixed(2)}`, best: (s: any) => s.estimated_cost === bestCost },
-                  { label: "Lead time", key: (s: any) => `${s.lead_time_days}d`, best: (s: any) => s.lead_time_days === bestLead },
-                  { label: "Risk score", key: (s: any) => (s.risk_score * 100).toFixed(0), best: (s: any) => s.risk_score === bestRisk },
-                  { label: "Reliability", key: (s: any) => `${(s.reliability_score * 100).toFixed(0)}%` },
-                  { label: "Availability", key: (s: any) => `${(s.availability_score * 100).toFixed(0)}%` },
-                  { label: "Sustainability", key: (s: any) => `${(s.sustainability_score * 100).toFixed(0)}%` },
-                  { label: "Certifications", key: (s: any) => s.certifications.join(", ") || "—" },
+                  { k: "Region", get: (s: typeof compareSet[number]) => s.sim.region.value },
+                  { k: "Country", get: (s: typeof compareSet[number]) => s.sim.country_of_origin.value },
+                  { k: "Estimated Cost", get: (s: typeof compareSet[number]) => `$${s.sim.estimated_cost.value.toFixed(2)}`, best: (s: typeof compareSet[number]) => s.sim.estimated_cost.value === bestCost },
+                  { k: "Lead Time", get: (s: typeof compareSet[number]) => `${s.sim.lead_time_days.value}d`, best: (s: typeof compareSet[number]) => s.sim.lead_time_days.value === bestLead },
+                  { k: "Risk", get: (s: typeof compareSet[number]) => s.sim.risk_score.value.toFixed(2), best: (s: typeof compareSet[number]) => s.sim.risk_score.value === bestRisk },
+                  { k: "Reliability", get: (s: typeof compareSet[number]) => s.sim.reliability_score.value.toFixed(2) },
+                  { k: "Sustainability", get: (s: typeof compareSet[number]) => s.sim.sustainability_score.value.toFixed(2) },
                 ].map((row) => (
-                  <tr key={row.label} className="border-t border-border/40">
-                    <td className="px-6 py-3 text-muted-foreground text-xs uppercase tracking-wider">{row.label}</td>
+                  <tr key={row.k} className="border-t border-border/40">
+                    <td className="px-6 py-3 text-muted-foreground text-xs uppercase tracking-wider">{row.k}</td>
                     {compareSet.map((s) => {
-                      const isBest = row.best?.(s);
+                      const isBest = (row as { best?: (s: typeof compareSet[number]) => boolean }).best?.(s);
                       return (
-                        <td key={s.supplier_id} className="px-4 py-3">
-                          <span className={isBest ? "inline-flex items-center gap-1.5 text-success font-semibold" : ""}>
-                            {row.key(s)}
-                            {isBest && <Badge className="bg-success/15 text-success border-success/30 text-[9px] px-1.5 py-0">Best</Badge>}
-                          </span>
+                        <td key={s.supplier_id} className="px-4 py-3 font-mono tabular-nums">
+                          <span className={isBest ? "text-success font-semibold" : ""}>{row.get(s)}</span>
+                          {isBest && <Badge variant="outline" className="ml-2 border-success/40 text-[10px]" style={{ color: "hsl(var(--success))" }}>Best</Badge>}
                         </td>
                       );
                     })}
@@ -163,12 +206,16 @@ const SupplierIntelligence = () => {
               </tbody>
             </table>
           </div>
-          <div className="px-6 py-4 bg-gradient-to-r from-primary/5 to-transparent border-t border-border/60">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-primary mb-1">AI Recommendation</div>
-            <p className="text-sm text-foreground/90">
-              Based on a balanced cost/risk profile, <b>{compareSet.find((s) => s.risk_score === bestRisk)?.supplier_name}</b> is the recommended primary supplier; consider <b>{compareSet.find((s) => s.estimated_cost === bestCost)?.supplier_name}</b> as a cost-optimized secondary source for diversification.
-            </p>
-          </div>
+        </div>
+      )}
+
+      {compareSet.length >= 2 && mode === "real" && (
+        <div className="rounded-xl border border-border/60 bg-card p-6 text-center">
+          <NotInRealData />
+          <p className="text-xs text-muted-foreground mt-2">
+            Side-by-side cost / risk / lead time comparison requires simulated intelligence.
+            Switch to <strong className="text-primary">Simulated</strong> mode.
+          </p>
         </div>
       )}
     </div>
