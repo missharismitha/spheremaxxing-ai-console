@@ -251,7 +251,7 @@ const DecisionSupport = () => {
 
           <div className="p-4 border-t border-border/60">
             <div className="flex gap-2 mb-2 flex-wrap">
-              {["Best supplier for RM-431?", "Where is single-source risk?", "Substitutes for Lithium Carbonate"].map((q) => (
+              {["Best supplier for Soy Lecithin?", "Substitutes for Calcium Carbonate"].map((q) => (
                 <button
                   key={q}
                   type="button"

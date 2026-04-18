@@ -6,9 +6,13 @@ Keeps answers grounded in dataset lookups (materials, suppliers, BOM signals).
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .mydata_json import fallback_answer_from_mydata, format_mydata_context_block
+from .simulated_substitutes import (
+    answer_simulated_substitutes,
+    format_simulated_substitutes_context,
+)
 from .db import (
     count_raw_materials,
     get_finished_products_for_material,
@@ -158,10 +162,17 @@ def _score_supplier_lines(material_id: int, limit: int = 6) -> List[str]:
 
 def build_data_context(user_message: str) -> str:
     """Plain-text block injected into the LLM (or used for fallback summaries)."""
+    sim = format_simulated_substitutes_context(user_message)
     mydata = format_mydata_context_block(user_message)
     total_m = count_raw_materials()
     mids, note = pick_material_ids_for_context(user_message, max_ids=3)
     parts: List[str] = []
+    if sim.strip():
+        parts.append(
+            "SIMULATED DATABASE — demo substitute catalog (not in Real mydata.json; same idea as in-app Simulated mode):"
+        )
+        parts.append(sim)
+        parts.append("---")
     if mydata.strip():
         parts.append("PRIMARY SOURCE — verified procurement relationships (same facts as Search / BOM; use for supplier names):")
         parts.append(mydata)
@@ -202,8 +213,16 @@ def build_data_context(user_message: str) -> str:
     return "\n".join(parts)
 
 
-def fallback_reply(user_message: str, data_context: str) -> str:
+def fallback_reply(
+    user_message: str,
+    data_context: str,
+    history: Optional[List[Dict[str, str]]] = None,
+) -> str:
     """Deterministic answer when LLM is unavailable."""
+    simulated = answer_simulated_substitutes(user_message, history)
+    if simulated:
+        return simulated
+
     lowered = user_message.strip().lower()
     mids, _ = pick_material_ids_for_context(user_message, max_ids=1)
 
