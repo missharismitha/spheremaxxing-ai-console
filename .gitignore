@@ -36,3 +36,5 @@ backend/.env
 .env
 .env.*
 !.env.example
+# Vite workspace env (not root .env)
+frontend/.env
