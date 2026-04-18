@@ -1,5 +1,6 @@
 // API placeholder layer — swap mock returns with real fetch calls when backend is ready.
 import { procurementData, allSuppliers, allRawMaterials, dashboardMetrics } from "@/data/mockData";
+import { isDifyConfigured, postDifyChatMessage } from "@/lib/difyChat";
 
 export async function fetchProcurementRecords(query?: string) {
   // TODO: replace with `await fetch('/api/procurement?q=...')`
@@ -71,11 +72,28 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Calls FastAPI `/api/chat` (proxied to :8000 in dev). Falls back to mydata.json (realData) if the API is unreachable. */
+export type ProcurementChatOptions = {
+  /** Dify conversation id from the previous response; omit or empty for a new thread. */
+  conversationId?: string;
+  /** Called when Dify returns a new conversation_id (persist for follow-ups). */
+  onConversationId?: (conversationId: string) => void;
+};
+
+/** Calls Dify when `VITE_DIFY_*` is set; otherwise FastAPI `/api/chat` (proxied to :8000 in dev); falls back to mydata.json if unreachable. */
 export async function postProcurementChat(
   message: string,
-  history: ProcurementChatTurn[]
+  history: ProcurementChatTurn[],
+  options?: ProcurementChatOptions,
 ): Promise<string> {
+  if (isDifyConfigured()) {
+    const { answer, conversationId } = await postDifyChatMessage(
+      message,
+      options?.conversationId ?? "",
+    );
+    options?.onConversationId?.(conversationId);
+    return answer;
+  }
+
   const { localProcurementChatFallback } = await import("@/lib/chatFallback");
 
   let res: Response;
