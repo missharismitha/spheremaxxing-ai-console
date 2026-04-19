@@ -7,4 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_DIFY_API_KEY?: string;
   /** Dify API base, e.g. https://api.dify.ai/v1 */
   readonly VITE_DIFY_BASE_URL?: string;
+  /** If the app’s input form uses another variable name instead of `query`, set it here. */
+  readonly VITE_DIFY_INPUT_QUERY_KEY?: string;
+  /** Set to "true" to use SSE streaming; otherwise blocking mode (default). */
+  readonly VITE_DIFY_STREAMING?: string;
 }

@@ -1,7 +1,9 @@
-"""FastAPI app: Spherecast procurement logic + chat stub."""
+"""FastAPI app: Spherecast procurement logic + chat stub + Agnes BOM routes for Dify."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from agnes.routes import agnes_startup, router as agnes_bom_router
 
 from .db import (
     get_material_by_id,
@@ -44,6 +46,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def _startup_agnes_tables() -> None:
+    """SQLite cache tables for Agnes enrichment / scrapers (Dify HTTP tool targets)."""
+    agnes_startup()
+
+
+app.include_router(agnes_bom_router)
 
 
 @app.get("/api/health")
