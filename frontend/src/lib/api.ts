@@ -1,6 +1,11 @@
 // API placeholder layer — swap mock returns with real fetch calls when backend is ready.
 import { procurementData, allSuppliers, allRawMaterials, dashboardMetrics } from "@/data/mockData";
-import { isDifyConfigured, postDifyChatMessage } from "@/lib/difyChat";
+import {
+  isDifyConfigured,
+  isDifyStreamingEnabled,
+  postDifyChatMessage,
+  uploadDifyFile,
+} from "@/lib/difyChat";
 
 export async function fetchProcurementRecords(query?: string) {
   // TODO: replace with `await fetch('/api/procurement?q=...')`
@@ -77,6 +82,14 @@ export type ProcurementChatOptions = {
   conversationId?: string;
   /** Called when Dify returns a new conversation_id (persist for follow-ups). */
   onConversationId?: (conversationId: string) => void;
+  /** CoA / spec sheets — uploaded to Dify before chat when using advanced-chat. */
+  attachments?: File[];
+  /**
+   * When using Dify + streaming, receives the latest full assistant text as tokens arrive.
+   * Final return value is still the complete answer string.
+   */
+  onStreamText?: (fullAnswerSoFar: string) => void;
+  signal?: AbortSignal;
 };
 
 /** Calls Dify when `VITE_DIFY_*` is set; otherwise FastAPI `/api/chat` (proxied to :8000 in dev); falls back to mydata.json if unreachable. */
@@ -86,9 +99,26 @@ export async function postProcurementChat(
   options?: ProcurementChatOptions,
 ): Promise<string> {
   if (isDifyConfigured()) {
+    const fileRefs = [];
+    for (const file of options?.attachments ?? []) {
+      const id = await uploadDifyFile(file, options?.signal);
+      fileRefs.push({
+        type: "document" as const,
+        transfer_method: "local_file" as const,
+        upload_file_id: id,
+      });
+    }
+
+    const stream = isDifyStreamingEnabled();
     const { answer, conversationId } = await postDifyChatMessage(
       message,
       options?.conversationId ?? "",
+      {
+        files: fileRefs.length ? fileRefs : undefined,
+        stream,
+        onStreamText: options?.onStreamText,
+        signal: options?.signal,
+      },
     );
     options?.onConversationId?.(conversationId);
     return answer;

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { aiInsights, procurementData } from "@/data/mockData";
 import { getProcurementApiLive, postProcurementChat } from "@/lib/api";
-import { isDifyConfigured } from "@/lib/difyChat";
+import { isDifyConfigured, isDifyStreamingEnabled } from "@/lib/difyChat";
 import {
   Sparkles,
   TrendingDown,
@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Send,
   Brain,
+  Paperclip,
 } from "lucide-react";
 
 const DecisionSupport = () => {
@@ -50,6 +51,9 @@ const DecisionSupport = () => {
   const [apiLive, setApiLive] = useState<boolean | null>(null);
   /** Dify advanced-chat thread id (returned from POST /chat-messages). */
   const [difyConversationId, setDifyConversationId] = useState("");
+  /** CoA / spec attachments for Dify (uploaded via /files/upload). */
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +77,16 @@ const DecisionSupport = () => {
       if (!trimmed || chatLoading) return;
 
       const history = messages.map((m) => ({ role: m.role, content: m.text }));
-      setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+      const useDifyStream = isDifyConfigured() && isDifyStreamingEnabled();
+      const filesToSend = [...attachments];
+      setAttachments([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+
+      setMessages((prev) => {
+        const next = [...prev, { role: "user" as const, text: trimmed }];
+        if (useDifyStream) next.push({ role: "assistant" as const, text: "" });
+        return next;
+      });
       setInput("");
       setChatLoading(true);
 
@@ -81,19 +94,46 @@ const DecisionSupport = () => {
         const reply = await postProcurementChat(trimmed, history, {
           conversationId: difyConversationId,
           onConversationId: setDifyConversationId,
+          attachments: filesToSend.length ? filesToSend : undefined,
+          onStreamText: useDifyStream
+            ? (t) => {
+                setMessages((prev) => {
+                  if (prev.length === 0) return prev;
+                  const last = prev[prev.length - 1];
+                  if (last.role !== "assistant") return prev;
+                  return [...prev.slice(0, -1), { role: "assistant" as const, text: t }];
+                });
+              }
+            : undefined,
         });
-        setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+        if (useDifyStream) {
+          setMessages((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (last.role === "assistant")
+              return [...prev.slice(0, -1), { role: "assistant" as const, text: reply }];
+            return [...prev, { role: "assistant" as const, text: reply }];
+          });
+        } else {
+          setMessages((prev) => [...prev, { role: "assistant" as const, text: reply }]);
+        }
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
-        const text = isDifyConfigured()
+        const errText = isDifyConfigured()
           ? `Dify chat error: ${err}`
           : `The chat API returned an error (not a connection issue). From the repo root run \`npm run dev:all\` so Vite and FastAPI start together, then retry. Details: ${err}`;
-        setMessages((prev) => [...prev, { role: "assistant", text }]);
+        setMessages((prev) => {
+          let base = prev;
+          if (useDifyStream && base.length > 0 && base[base.length - 1].role === "assistant") {
+            base = base.slice(0, -1);
+          }
+          return [...base, { role: "assistant" as const, text: errText }];
+        });
       } finally {
         setChatLoading(false);
       }
     },
-    [chatLoading, messages, difyConversationId],
+    [attachments, chatLoading, difyConversationId, messages],
   );
 
   return (
@@ -243,11 +283,13 @@ const DecisionSupport = () => {
                     ? "bg-primary text-primary-foreground rounded-br-sm"
                     : "bg-secondary/60 border border-border/60 rounded-bl-sm"
                 }`}>
-                  {m.text}
+                  {m.text ||
+                    (m.role === "assistant" ? (chatLoading ? "…" : "") : "")}
                 </div>
               </div>
             ))}
-            {chatLoading && (
+            {chatLoading &&
+              !(isDifyConfigured() && isDifyStreamingEnabled() && messages[messages.length - 1]?.role === "assistant") && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm text-muted-foreground bg-secondary/40 border border-border/60 rounded-bl-sm animate-pulse">
                   Thinking…
@@ -281,7 +323,57 @@ const DecisionSupport = () => {
                 </button>
               ))}
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept=".pdf,.doc,.docx,.txt,.md,.csv,application/pdf,text/plain"
+              disabled={chatLoading || !isDifyConfigured()}
+              onChange={(e) => {
+                const list = e.target.files;
+                if (!list?.length) return;
+                setAttachments((prev) => [...prev, ...Array.from(list)]);
+              }}
+            />
+            {isDifyConfigured() && attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {attachments.map((f, i) => (
+                  <span
+                    key={`${f.name}-${i}`}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-secondary/60 border border-border/50 max-w-[200px] truncate"
+                    title={f.name}
+                  >
+                    {f.name}
+                    <button
+                      type="button"
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      disabled={chatLoading}
+                      aria-label={`Remove ${f.name}`}
+                      onClick={() =>
+                        setAttachments((prev) => prev.filter((_, j) => j !== i))
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
+              {isDifyConfigured() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 shrink-0 border-border/60"
+                  disabled={chatLoading}
+                  title="Attach CoA or spec (Dify)"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              )}
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
