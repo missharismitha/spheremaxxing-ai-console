@@ -9,8 +9,10 @@ import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.security import allowed_cors_origins, require_api_key
 
 from .routes import agnes_startup, router
 
@@ -33,9 +35,9 @@ async def log_requests(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_cors_origins(),
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 
@@ -44,7 +46,8 @@ def startup():
     agnes_startup()
 
 
-app.include_router(router)
+# Protect every Agnes route with the shared API key.
+app.include_router(router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/api/health")
