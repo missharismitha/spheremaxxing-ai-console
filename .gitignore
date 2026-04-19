@@ -24,3 +24,17 @@ dist-ssr
 *.sw?
 
 package-lock.json
+
+# Python (backend)
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+.Python
+backend/.env
+.env
+.env.*
+!.env.example
+# Vite workspace env (not root .env)
+frontend/.env
