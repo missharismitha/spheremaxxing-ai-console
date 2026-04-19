@@ -280,3 +280,4 @@ def fallback_reply(
         f"Ask about best supplier, risk, or substitutes to narrow the answer, "
         f"or paste another SKU to switch context."
     )
+    
