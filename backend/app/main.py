@@ -1,10 +1,11 @@
 """FastAPI app: Spherecast procurement logic + chat stub + Agnes BOM routes for Dify."""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from agnes.routes import agnes_startup, router as agnes_bom_router
 
+from .security import allowed_cors_origins, require_api_key
 from .db import (
     get_material_by_id,
     get_raw_materials,
@@ -41,10 +42,10 @@ app = FastAPI(title="SphereMaxxing API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_cors_origins(),
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 
@@ -54,7 +55,8 @@ def _startup_agnes_tables() -> None:
     agnes_startup()
 
 
-app.include_router(agnes_bom_router)
+# All Agnes BOM routes require the shared API key.
+app.include_router(agnes_bom_router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/api/health")
@@ -62,12 +64,16 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/materials")
+@app.get("/api/materials", dependencies=[Depends(require_api_key)])
 def list_materials():
     return get_raw_materials()
 
 
-@app.post("/api/recommend", response_model=RecommendResponse)
+@app.post(
+    "/api/recommend",
+    response_model=RecommendResponse,
+    dependencies=[Depends(require_api_key)],
+)
 def recommend(req: RecommendRequest):
     original = get_material_by_id(req.material_id)
 
@@ -169,7 +175,11 @@ def recommend(req: RecommendRequest):
     )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post(
+    "/api/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(require_api_key)],
+)
 async def chat(body: ChatRequest) -> ChatResponse:
     data_context = build_data_context(body.message)
     hist = (
