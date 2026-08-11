@@ -1,10 +1,32 @@
 # Spheremaxxing
 
+**🏆 Best Usage of Dify · TUM.ai Makeathon 2026 · European Hackathon League · Spherecast (YC S24) Challenge**
+
 > AI-powered procurement and supply-chain intelligence platform for smarter sourcing decisions.
 
 Spheremaxxing is an enterprise-grade procurement intelligence console that helps sourcing managers, supply-chain analysts, and operations teams discover suppliers, compare sourcing paths, evaluate raw-material substitutes, and get AI-driven decision support — all on top of their real BOM data, with a clearly tagged simulated intelligence layer for what the data alone can't tell you.
 
 🔗 **Live demo:** https://spheremaxxing.lovable.app
+
+---
+
+## 🏆 Best Usage of Dify — TUM.ai Makeathon 2026
+
+This project was built during the **TUM.ai Makeathon 2026** in Munich, the inaugural match of the **European Hackathon League (EHL)**.
+
+The event brought together **500+ participants across 101 teams and 4 challenges** for **48 hours** of hacking.
+
+Our team worked on the **Spherecast** challenge, presented by **Spherecast (Y Combinator S24)**, which is building **Agnes**, an AI Supply Chain Manager for consumer-goods companies.
+
+The project received the **Best Usage of Dify** award.
+
+---
+
+## My Contribution
+
+I owned the system architecture, product design, frontend implementation, and research direction for the material-substitution workflow. I designed how the product components should interact, researched how alternative materials could be evaluated and scored for lower-cost replacement, and built the frontend experience around the resulting decision-support workflow.
+
+The Dify orchestration layer was developed collaboratively by the team and is shown here to document the end-to-end system architecture rather than to imply sole implementation ownership.
 
 ---
 
@@ -59,6 +81,16 @@ Mode is managed by `DataModeContext` and persisted to `localStorage`.
 - **Groq** LLM integration with retrieval grounded in `mydata.json`
 - **Firecrawl** for regulatory / news scraping
 - Optional **Dify** chat integration (configured via `VITE_DIFY_*` env vars)
+
+---
+
+## AI Workflow Architecture
+
+The Agnes decision-support engine is orchestrated as a **Dify workflow**:
+
+![Agnes Dify workflow — end-to-end orchestration](docs/dify-workflow.png)
+
+**Flow:** User query → intent classification → structured extraction → parallel context / PubChem / regulatory / supply-chain / document retrieval → risk classification → Agnes response → scenario simulation → final answer.
 
 ---
 
