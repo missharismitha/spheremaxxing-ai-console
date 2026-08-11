@@ -1,16 +1,16 @@
 # Spheremaxxing
 
-**🏆 Best Usage of Dify · TUM.ai Makeathon 2026 · European Hackathon League · Spherecast (YC S24) Challenge**
+**🏆 Best Usage of Dify · TUM.ai Makeathon 2026 (Munich) · Spherecast (YC S24) · European Hackathon League**
 
 > AI-powered procurement and supply-chain intelligence platform for smarter sourcing decisions.
 
-Spheremaxxing is an enterprise-grade procurement intelligence console that helps sourcing managers, supply-chain analysts, and operations teams discover suppliers, compare sourcing paths, evaluate raw-material substitutes, and get AI-driven decision support — all on top of their real BOM data, with a clearly tagged simulated intelligence layer for what the data alone can't tell you.
+Spheremaxxing is an enterprise-grade procurement intelligence console that helps sourcing managers, supply-chain analysts, and operations teams discover suppliers, compare sourcing paths, evaluate raw-material substitutes, and get AI-driven decision support - all on top of their real BOM data, with a clearly tagged simulated intelligence layer for what the data alone can't tell you.
 
 🔗 **Live demo:** https://spheremaxxing.lovable.app
 
 ---
 
-## 🏆 Best Usage of Dify — TUM.ai Makeathon 2026
+## 🏆 Best Usage of Dify - TUM.ai Makeathon 2026
 
 This project was built during the **TUM.ai Makeathon 2026** in Munich, the inaugural match of the **European Hackathon League (EHL)**.
 
@@ -32,14 +32,14 @@ The Dify orchestration layer was developed collaboratively by the team and is sh
 
 ## ✨ Features
 
-- **Dashboard** — KPIs for active suppliers, materials tracked, BOMs evaluated, AI recommendations, risk alerts, and cost-optimization opportunities.
-- **Procurement Search** — Search across finished products, BOM IDs, raw materials, suppliers, regions, and SKUs with detailed sourcing-path drawer.
-- **BOM Explorer** — Hierarchical drill-down: Company → Finished Product → BOM → Raw Material → Supplier.
-- **Supplier Intelligence** — Side-by-side comparison of 2–4 suppliers with pricing, lead times, risk, reliability, and region.
-- **Substitution Engine** — AI-suggested substitute materials with compatibility, cost-impact, risk-impact, and recommendation confidence.
-- **Decision Support** — Conversational procurement co-pilot with best-cost / lowest-risk / best-balanced sourcing recommendations.
-- **Analytics** — Boardroom-ready charts for supplier distribution, material dependency, sourcing-risk breakdown, and substitution usage.
-- **Three Data Modes** — Real / Simulated Intelligence / Comparison, switchable globally from the top bar.
+- **Dashboard** - KPIs for active suppliers, materials tracked, BOMs evaluated, AI recommendations, risk alerts, and cost-optimization opportunities.
+- **Procurement Search** - Search across finished products, BOM IDs, raw materials, suppliers, regions, and SKUs with detailed sourcing-path drawer.
+- **BOM Explorer** - Hierarchical drill-down: Company → Finished Product → BOM → Raw Material → Supplier.
+- **Supplier Intelligence** - Side-by-side comparison of 2–4 suppliers with pricing, lead times, risk, reliability, and region.
+- **Substitution Engine** - AI-suggested substitute materials with compatibility, cost-impact, risk-impact, and recommendation confidence.
+- **Decision Support** - Conversational procurement co-pilot with best-cost / lowest-risk / best-balanced sourcing recommendations.
+- **Analytics** - Boardroom-ready charts for supplier distribution, material dependency, sourcing-risk breakdown, and substitution usage.
+- **Three Data Modes** - Real / Simulated Intelligence / Comparison, switchable globally from the top bar.
 
 ---
 
@@ -47,10 +47,10 @@ The Dify orchestration layer was developed collaboratively by the team and is sh
 
 The app keeps two data sources strictly separate:
 
-### A. Real Data Layer — `frontend/src/data/mydata.json`
-The source of truth for actual procurement relationships (companies, finished products, BOMs, raw materials, suppliers). Transformed into typed entities by `frontend/src/data/realData.ts` and used by Dashboard, Procurement Search, BOM Explorer, and Supplier Intelligence. When a field is missing, the UI shows *"Not available in real dataset"* — never invented values.
+### A. Real Data Layer - `frontend/src/data/mydata.json`
+The source of truth for actual procurement relationships (companies, finished products, BOMs, raw materials, suppliers). Transformed into typed entities by `frontend/src/data/realData.ts` and used by Dashboard, Procurement Search, BOM Explorer, and Supplier Intelligence. When a field is missing, the UI shows *"Not available in real dataset"* - never invented values.
 
-### B. Simulated Intelligence Layer — `frontend/src/data/ingredient_metadata.json`
+### B. Simulated Intelligence Layer - `frontend/src/data/ingredient_metadata.json`
 A **blueprint** describing what enrichment fields *can* exist (purity, regulatory status, chemical formula, certifications, lead time, allergen info, etc.). `frontend/src/data/simulatedIntelligence.ts` deterministically generates inferred values (risk score, reliability, estimated cost, substitute candidates…) seeded from real entity IDs, and every value carries a `provenance` tag and `confidence: Low | Medium | High` badge.
 
 > **Rule:** Metadata blueprint rows are never treated as real procurement rows. Simulated outputs are always visibly tagged in the UI.
@@ -77,7 +77,7 @@ Mode is managed by `DataModeContext` and persisted to `localStorage`.
 - **Vitest** + Testing Library
 
 ### Backend (`/backend`)
-- **FastAPI** (Python) — `app/main.py` for procurement chat, `agnes/main.py` for ingredient enrichment
+- **FastAPI** (Python) - `app/main.py` for procurement chat, `agnes/main.py` for ingredient enrichment
 - **Groq** LLM integration with retrieval grounded in `mydata.json`
 - **Firecrawl** for regulatory / news scraping
 - Optional **Dify** chat integration (configured via `VITE_DIFY_*` env vars)
@@ -88,7 +88,7 @@ Mode is managed by `DataModeContext` and persisted to `localStorage`.
 
 The Agnes decision-support engine is orchestrated as a **Dify workflow**:
 
-![Agnes Dify workflow — end-to-end orchestration](docs/dify-workflow.png)
+![Agnes Dify workflow - end-to-end orchestration](docs/dify-workflow.png)
 
 **Flow:** User query → intent classification → structured extraction → parallel context / PubChem / regulatory / supply-chain / document retrieval → risk classification → Agnes response → scenario simulation → final answer.
 
@@ -145,7 +145,7 @@ bun run test       # vitest
 bun run lint
 ```
 
-### 2. Backend (optional — UI works standalone with the dataset)
+### 2. Backend (optional - UI works standalone with the dataset)
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
@@ -179,17 +179,17 @@ FIRECRAWL_API_KEY=...
 
 ## 🎨 Design system
 
-- **Palette:** dark enterprise — deep navy background, electric blue primary, subtle teal accents, silver text. All colors are HSL semantic tokens defined in `frontend/src/index.css` and `frontend/tailwind.config.ts`.
+- **Palette:** dark enterprise - deep navy background, electric blue primary, subtle teal accents, silver text. All colors are HSL semantic tokens defined in `frontend/src/index.css` and `frontend/tailwind.config.ts`.
 - **Components:** rounded cards, light glassmorphism, smooth hover states, `.metric-card` utility class.
-- **Rule:** components consume semantic tokens (`bg-background`, `text-primary`, …) — never hardcoded colors.
+- **Rule:** components consume semantic tokens (`bg-background`, `text-primary`, …) - never hardcoded colors.
 
 ---
 
 ## 🔌 Backend-readiness
 
 The frontend is structured for easy backend swap-in:
-- `frontend/src/lib/api.ts` is the single API abstraction — replace mock returns with `fetch` calls.
-- Real entities in `realData.ts` mirror a normalized relational schema (companies, products, BOMs, materials, suppliers, supplier_relationships) — drop-in for Postgres / Lovable Cloud.
+- `frontend/src/lib/api.ts` is the single API abstraction - replace mock returns with `fetch` calls.
+- Real entities in `realData.ts` mirror a normalized relational schema (companies, products, BOMs, materials, suppliers, supplier_relationships) - drop-in for Postgres / Lovable Cloud.
 - The simulated layer is deterministic per entity ID, so it can be precomputed server-side or kept client-side without divergence.
 
 ---
@@ -207,7 +207,7 @@ The frontend is structured for easy backend swap-in:
 
 ## 📝 License
 
-MIT — built for hackathon demonstration. Datasets included are illustrative.
+MIT - built for hackathon demonstration. Datasets included are illustrative.
 
 ---
 
